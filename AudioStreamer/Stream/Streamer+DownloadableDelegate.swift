@@ -15,7 +15,8 @@ extension Streamer: DownloadingDelegate {
         os_log("%@ - %d [error: %@]", log: Streamer.logger, type: .debug, #function, #line, String(describing: error?.localizedDescription))
         
         if let error = error, let url = download.url {
-            DispatchQueue.main.async { [unowned self] in
+            DispatchQueue.main.async { [weak self] in
+                guard let `self` = self else { return }
                 self.delegate?.streamer(self, failedDownloadWithError: error, forURL: url)
             }
         }

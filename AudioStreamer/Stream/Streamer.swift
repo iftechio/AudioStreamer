@@ -24,7 +24,7 @@ open class Streamer: Streaming {
         let currentTime = TimeInterval(playerTime.sampleTime) / playerTime.sampleRate
         return currentTime + currentTimeOffset
     }
-    public var delegate: StreamingDelegate?
+    public weak var delegate: StreamingDelegate?
     public internal(set) var duration: TimeInterval?
     public lazy var downloader: Downloading = {
         let downloader = Downloader()
@@ -75,6 +75,12 @@ open class Streamer: Streaming {
         // Setup the audio engine (attach nodes, connect stuff, etc). No playback yet.
         setupAudioEngine()
     }
+    
+    deinit {
+        volumeRampTimer?.invalidate()
+        volumeRampTimer = nil
+        stop()
+    }
 
     // MARK: - Setup
 
@@ -124,6 +130,7 @@ open class Streamer: Streaming {
         stop()
         duration = nil
         reader = nil
+        parser = nil
         isFileSchedulingComplete = false
         
         // Create a new parser
@@ -239,7 +246,8 @@ open class Streamer: Streaming {
     
     func swellVolume(to newVolume: Float, duration: TimeInterval = 0.5) {
         volumeRampTargetValue = newVolume
-        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Int(duration*1000/2))) { [unowned self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Int(duration*1000/2))) { [weak self] in
+            guard let `self` = self else { return }
             self.volumeRampTimer?.invalidate()
             let timer = Timer(timeInterval: Double(Float((duration/2.0))/(newVolume * 10)), repeats: true) { timer in
                 if self.volume != newVolume {
@@ -305,9 +313,10 @@ open class Streamer: Streaming {
             return
         }
 
-        if currentTime >= duration {
+        if currentTime >= duration, duration > 0 {
             try? seek(to: 0)
             pause()
+            delegate?.streamerDidFinishPlaying(self)
         }
     }
 

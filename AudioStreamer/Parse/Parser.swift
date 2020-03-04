@@ -19,13 +19,21 @@ public class Parser: Parsing {
     // MARK: - Parsing props
     
     public internal(set) var dataFormat: AVAudioFormat?
-    public internal(set) var packets = [(Data, AudioStreamPacketDescription?)]()
+        
+    private var packets = [(Data, AudioStreamPacketDescription?)]()
+    public var packetsCount: Int {
+        objc_sync_enter(self)
+        let result = packets.count
+        objc_sync_exit(self)
+        return result
+    }
+
     public var totalPacketCount: AVAudioPacketCount? {
         guard let _ = dataFormat else {
             return nil
         }
         
-        return max(AVAudioPacketCount(packetCount), AVAudioPacketCount(packets.count))
+        return max(AVAudioPacketCount(packetCount), AVAudioPacketCount(packetsCount))
     }
     
     // MARK: - Properties
@@ -51,7 +59,26 @@ public class Parser: Parsing {
         }
     }
     
+    deinit {
+        if let streamID = streamID {
+            AudioFileStreamClose(streamID)
+        }
+    }
+    
     // MARK: - Methods
+    
+    public func appendPacket(data: Data, description: AudioStreamPacketDescription?) {
+        objc_sync_enter(self)
+        packets.append((data, description))
+        objc_sync_exit(self)
+    }
+
+    public func packet(at index: Int) -> (Data, AudioStreamPacketDescription?) {
+        objc_sync_enter(self)
+        let result = packets[index]
+        objc_sync_exit(self)
+        return result
+    }
     
     public func parse(data: Data) throws {
         os_log("%@ - %d", log: Parser.logger, type: .debug, #function, #line)
